@@ -57,6 +57,7 @@ export default function CodeEditor({ roomId, activeFile, users }) {
         // Only update if it's not our own immediate echo (simplified handling)
         setContent(prevContent => {
           if (prevContent !== data.content) {
+            lastValueRef.current = data.content;
             return data.content;
           }
           return prevContent;
@@ -146,33 +147,48 @@ export default function CodeEditor({ roomId, activeFile, users }) {
     });
   };
 
+  const lastValueRef = useRef('');
+  const logDebounceRef = useRef(null);
+
+  useEffect(() => {
+    if (activeFile) {
+      lastValueRef.current = activeFile.content;
+    }
+  }, [activeFile?.filename]);
+
   const handleEditorChange = (value, event) => {
     // Check if the change is on a locked line (by someone else)
-    const changeLine = event.changes[0]?.range.startLineNumber;
+    const change = event.changes[0];
+    if (!change) return;
+
+    const changeLine = change.range.startLineNumber;
     const lockedBy = lineLocksRef.current[changeLine];
     
     if (lockedBy && lockedBy !== socket.userId) {
-      // If the line is locked by someone else, we shouldn't have been able to type here
-      // Ideally we would revert, but for now we block the broadcast and alert
       console.warn(`Line ${changeLine} is locked by ${lockedBy}`);
       return; 
     }
 
     setContent(value);
+    lastValueRef.current = value;
 
-    // Send log representation (simplified)
-    const editLog = event.changes.length > 0 ? {
-      lineNumber: event.changes[0].range.startLineNumber,
-      oldContent: '', // Requires complex tracking
-      newContent: event.changes[0].text
-    } : null;
+    // Calculate edit log info
+    const oldContent = lastValueRef.current.substring(change.rangeOffset, change.rangeOffset + change.rangeLength);
+    const editLog = {
+      lineNumber: change.range.startLineNumber,
+      oldContent: oldContent,
+      newContent: change.text
+    };
 
+    // Broadcast content and edit log together for real-time responsiveness and server recording
     socket.emit('content-change', {
       roomId,
       filename: activeFile.filename,
       content: value,
       editLog
     });
+
+    lastValueRef.current = value;
   };
 
   const handleSave = () => {

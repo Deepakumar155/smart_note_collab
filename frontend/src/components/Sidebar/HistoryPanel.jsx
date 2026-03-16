@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import api from '../../api';
+import socket from '../../socket';
 
 export default function HistoryPanel({ roomId, activeFile }) {
   const [logs, setLogs] = useState([]);
@@ -28,7 +29,20 @@ export default function HistoryPanel({ roomId, activeFile }) {
     };
 
     fetchData();
-  }, [roomId, activeFile]);
+
+    // Listen for real-time log updates
+    const handleLogUpdate = (data) => {
+      if (data.filename === activeFile.filename) {
+        setLogs(data.logs.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+      }
+    };
+
+    socket.on('log-update', handleLogUpdate);
+
+    return () => {
+      socket.off('log-update', handleLogUpdate);
+    };
+  }, [roomId, activeFile?.filename]);
 
   const handleSaveVersion = async () => {
     try {
@@ -37,20 +51,31 @@ export default function HistoryPanel({ roomId, activeFile }) {
         content: activeFile.content
       });
       setVersions([data.version, ...versions]);
+      alert('Version saved successfully!');
     } catch (err) {
+      console.error('Failed to save version');
       alert('Failed to save version');
     }
   };
 
   const handleRestore = async (versionId) => {
-    if (!window.confirm('Are you sure you want to restore this version? Current unsaved changes will be lost.')) return;
     try {
       await api.post(`/docs/${roomId}/restore-version`, {
         filename: activeFile.filename,
         versionId
       });
-      alert('Version restored!');
+      
+      // Refresh logs and versions to show restoration event
+      const [logsRes, versionsRes] = await Promise.all([
+        api.get(`/docs/${roomId}/logs/${activeFile.filename}`),
+        api.get(`/docs/${roomId}/versions/${activeFile.filename}`)
+      ]);
+      setLogs(logsRes.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+      setVersions(versionsRes.data.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+      
+      alert('Version restored successfully');
     } catch (err) {
+      console.error('Failed to restore version');
       alert('Failed to restore version');
     }
   };

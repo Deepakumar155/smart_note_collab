@@ -5,6 +5,16 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const { Server } = require('socket.io');
 
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('UNHANDLED REJECTION at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
 dotenv.config();
 
 const app = express();
@@ -12,7 +22,7 @@ const server = http.createServer(app);
 
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
   credentials: true
 }));
 app.use(express.json());
@@ -21,7 +31,7 @@ app.use(express.urlencoded({ extended: true }));
 // Socket.IO Setup
 const io = new Server(server, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:5173',
+    origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
     methods: ["GET", "POST"]
   }
 });

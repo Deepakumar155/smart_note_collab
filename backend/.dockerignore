@@ -1,0 +1,12 @@
+node_modules
+npm-debug.log
+.env
+.git
+.gitignore
+tests
+README.md
+Dockerfile
+docker-compose.yml
+.dockerignore
+uploads
+temp

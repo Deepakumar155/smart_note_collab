@@ -1,34 +1,67 @@
 const Room = require('../models/Room');
 
+// Debounce map for database saves: Map<roomId:filename, timeoutId>
+const saveDebounce = new Map();
+// Map to store pending edit logs: Map<roomId:filename, log[]>
+const pendingLogs = new Map();
+
 module.exports = (io, socket) => {
-  // Initialize line locks in memory
+  // Initialize line locks in memory if not already done
   if (!io.lineLocks) io.lineLocks = {};
   
   socket.on('content-change', ({ roomId, filename, content, editLog }) => {
-    // Broadcast to others in the room
-    socket.to(roomId).emit('content-change', { filename, content });
+    // Broadcast to everyone in the room (including sender) to keep all state in sync
+    io.to(roomId).emit('content-change', { filename, content });
     
-    // Asynchronously save to DB
-    Room.findOne({ roomId }).then(room => {
-      if (room) {
-        const file = room.files.find(f => f.filename === filename);
-        if (file) {
-          file.content = content;
-          file.updatedAt = new Date();
-          
-          if (editLog) {
-            file.editLogs.push({
-              editedBy: socket.username || socket.userId,
-              lineNumber: editLog.lineNumber,
-              oldContent: editLog.oldContent,
-              newContent: editLog.newContent,
-              timestamp: new Date()
-            });
-          }
-          room.save().catch(err => console.error('Save error on content-change:', err));
-        }
+    const debounceKey = `${roomId}:${filename}`;
+    
+    // Accumulate log if provided
+    if (editLog) {
+      if (!pendingLogs.has(debounceKey)) {
+        pendingLogs.set(debounceKey, []);
       }
-    }).catch(err => console.error(err));
+      pendingLogs.get(debounceKey).push({
+        editedBy: socket.username || socket.userId || 'Anonymous',
+        lineNumber: editLog.lineNumber,
+        oldContent: editLog.oldContent,
+        newContent: editLog.newContent,
+        timestamp: new Date()
+      });
+    }
+
+    if (saveDebounce.has(debounceKey)) {
+      clearTimeout(saveDebounce.get(debounceKey));
+    }
+
+    // Set a timer to save to DB after a pause in typing
+    const timeoutId = setTimeout(async () => {
+      try {
+        const room = await Room.findOne({ roomId });
+        if (!room) return;
+
+        const file = room.files.find(f => f.filename === filename);
+        if (!file) return;
+
+        file.content = content;
+        file.updatedAt = new Date();
+        
+        // Add all accumulated logs
+        const logs = pendingLogs.get(debounceKey) || [];
+        if (logs.length > 0) {
+          file.editLogs.push(...logs);
+          pendingLogs.delete(debounceKey);
+          // Notify the room that new logs are available
+          io.to(roomId).emit('log-update', { filename, logs: file.editLogs });
+        }
+        
+        await room.save();
+        saveDebounce.delete(debounceKey);
+      } catch (err) {
+        console.error('Debounced save error:', err);
+      }
+    }, 1500); // Increased slightly to catch more changes in a burst
+
+    saveDebounce.set(debounceKey, timeoutId);
   });
 
   socket.on('notes-change', ({ roomId, filename, notes }) => {
@@ -108,3 +141,6 @@ module.exports = (io, socket) => {
     }
   });
 };
+
+module.exports.saveDebounce = saveDebounce;
+module.exports.pendingLogs = pendingLogs;

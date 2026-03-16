@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const upload = require('../utils/multerConfig');
 const fs = require('fs');
 const path = require('path');
+const { saveDebounce, pendingLogs } = require('../sockets/editorHandler');
 
 const router = express.Router();
 
@@ -156,7 +157,8 @@ router.post('/:roomId/version', auth, async (req, res) => {
     file.versions.push(version);
     await room.save();
 
-    res.status(201).json({ message: 'Version saved successfully', version });
+    const savedVersion = file.versions[file.versions.length - 1]; 
+    res.status(201).json({ message: 'Version saved successfully', version: savedVersion });
   } catch (error) {
     console.error(error);
     res.status(500).send('Server Error');
@@ -182,31 +184,71 @@ router.get('/:roomId/versions/:filename', auth, async (req, res) => {
 // @route   POST /api/docs/:roomId/restore-version
 router.post('/:roomId/restore-version', auth, async (req, res) => {
   try {
-    const { filename, versionId } = req.body; // or content
+    const { filename, versionId } = req.body;
+    console.log('RESTORE VERSION REQUEST:', { roomId: req.params.roomId, filename, versionId });
+    
     const room = await Room.findOne({ roomId: req.params.roomId });
-    if (!room) return res.status(404).json({ message: 'Room not found' });
+    if (!room) {
+      console.warn('RESTORE ERROR: Room not found', req.params.roomId);
+      return res.status(404).json({ message: 'Room not found' });
+    }
 
     const file = room.files.find(f => f.filename === filename);
-    if (!file) return res.status(404).json({ message: 'File not found' });
+    if (!file) {
+      console.warn('RESTORE ERROR: File not found', filename);
+      return res.status(404).json({ message: 'File not found' });
+    }
 
     const versionToRestore = file.versions.id(versionId);
-    if (!versionToRestore) return res.status(404).json({ message: 'Version not found' });
+    if (!versionToRestore) {
+      console.warn('RESTORE ERROR: Version not found', versionId);
+      return res.status(404).json({ message: 'Version not found' });
+    }
 
     file.content = versionToRestore.content;
     file.updatedAt = new Date();
+    
+    // Log the restoration event
+    const restorationLog = {
+      editedBy: req.user.username || req.user.id || 'System',
+      lineNumber: 0, // 0 indicates a full file restoration
+      oldContent: 'Previous Version',
+      newContent: `Restored to version from ${new Date(versionToRestore.timestamp).toLocaleString()}`,
+      timestamp: new Date()
+    };
+    file.editLogs.push(restorationLog);
+
+    // Clear any pending debounced saves and logs for this file to prevent overwrite
+    const debounceKey = `${req.params.roomId}:${filename}`;
+    if (saveDebounce.has(debounceKey)) {
+      clearTimeout(saveDebounce.get(debounceKey));
+      saveDebounce.delete(debounceKey);
+    }
+    pendingLogs.delete(debounceKey);
+
     await room.save();
 
-    // Broadcast the restored content to the room using the io instance saved in req
+    console.log('RESTORE SUCCESS:', filename, versionId);
+
+    // Broadcast the restored content and new logs to the room
     if (req.io) {
       req.io.to(room.roomId).emit('content-change', {
         filename: filename,
         content: file.content
       });
+      req.io.to(room.roomId).emit('log-update', { 
+        filename, 
+        logs: file.editLogs 
+      });
     }
 
-    res.json({ message: 'Version restored', content: file.content });
+    res.json({ 
+      message: 'Version restored', 
+      content: file.content,
+      logs: file.editLogs
+    });
   } catch (error) {
-    console.error(error);
+    console.error('RESTORE SERVER ERROR:', error);
     res.status(500).send('Server Error');
   }
 });
