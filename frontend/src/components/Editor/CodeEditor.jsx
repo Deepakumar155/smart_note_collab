@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import Editor from '@monaco-editor/react';
 import socket from '../../socket';
 
-export default function CodeEditor({ roomId, activeFile, users }) {
+export default function CodeEditor({ roomId, activeFile, users, userId, onContentChange }) {
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
@@ -11,17 +11,36 @@ export default function CodeEditor({ roomId, activeFile, users }) {
   const [content, setContent] = useState('');
   const [localChangeIdx, setLocalChangeIdx] = useState(0);
   const [savedStatus, setSavedStatus] = useState(null); // 'saving', 'saved', or null
+  const isRevertingRef = useRef(false);
+  const isIncomingChangeRef = useRef(false);
+  
+  // Use refs for props used in event listener closures to avoid stale closure issues
+  const activeFileRef = useRef(activeFile);
+  const roomIdRef = useRef(roomId);
 
-  // Update editor content when activeFile changes
   useEffect(() => {
-    if (activeFile) {
-      setContent(activeFile.content);
+    activeFileRef.current = activeFile;
+  }, [activeFile]);
+
+  useEffect(() => {
+    roomIdRef.current = roomId;
+  }, [roomId]);
+
+  // Update editor content when activeFile changes (initial load or switch)
+  useEffect(() => {
+    if (activeFile && editorRef.current) {
+      if (editorRef.current.getValue() !== activeFile.content) {
+        isIncomingChangeRef.current = true;
+        editorRef.current.setValue(activeFile.content);
+        lastValueRef.current = activeFile.content;
+        isIncomingChangeRef.current = false;
+      }
       // Reset locks and decorations on file change locally
       lineLocksRef.current = {};
       updateDecorations();
       setSavedStatus(null);
     }
-  }, [activeFile?.filename, activeFile?.content]);
+  }, [activeFile?.filename]); // ONLY on filename change to avoid resets on content changes
 
   const updateDecorations = () => {
     if (!editorRef.current || !monacoRef.current) return;
@@ -30,20 +49,18 @@ export default function CodeEditor({ roomId, activeFile, users }) {
 
     // Line locks
     for (const [line, lockedBy] of Object.entries(lineLocksRef.current)) {
-      if (lockedBy !== socket.userId) { // Don't highlight our own locks as error
+      if (lockedBy && lockedBy !== userId) { 
         newDecorations.push({
           range: new monacoRef.current.Range(parseInt(line), 1, parseInt(line), 1),
           options: {
             isWholeLine: true,
             className: 'locked-line-decoration',
-            hoverMessage: { value: 'This line is locked by another user.' }
+            hoverMessage: { value: `Locked by ${lockedBy.substring(0, 6)}...` },
+            stickiness: monacoRef.current.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges
           }
         });
       }
     }
-
-    // Since we don't have remote cursors fully managed in state here (for brevity), 
-    // ideally we would add cursor decorations here too.
 
     decorationsRef.current = editorRef.current.deltaDecorations(
       decorationsRef.current,
@@ -52,20 +69,23 @@ export default function CodeEditor({ roomId, activeFile, users }) {
   };
 
   useEffect(() => {
-    socket.on('content-change', (data) => {
-      if (data.filename === activeFile?.filename) {
-        // Only update if it's not our own immediate echo (simplified handling)
-        setContent(prevContent => {
-          if (prevContent !== data.content) {
-            lastValueRef.current = data.content;
-            return data.content;
-          }
-          return prevContent;
-        });
+    const handleContentChange = (data) => {
+      if (data.filename === activeFile?.filename && editorRef.current) {
+        const currentVal = editorRef.current.getValue();
+        if (currentVal !== data.content) {
+          // Use executeEdits or setValue if major change to preserve some cursor state
+          // For simplicity, setValue but only if actually different from what we have
+          const position = editorRef.current.getPosition();
+          isIncomingChangeRef.current = true;
+          editorRef.current.setValue(data.content);
+          editorRef.current.setPosition(position);
+          lastValueRef.current = data.content;
+          isIncomingChangeRef.current = false;
+        }
       }
-    });
+    };
 
-    socket.on('line-lock-broadcast', ({ filename, locks }) => {
+    const handleLineLocks = ({ filename, locks }) => {
       if (filename === activeFile?.filename) {
         const parsedLocks = {};
         for (const line in locks) {
@@ -74,8 +94,11 @@ export default function CodeEditor({ roomId, activeFile, users }) {
         lineLocksRef.current = parsedLocks;
         updateDecorations();
       }
-    });
+    };
 
+    socket.on('content-change', handleContentChange);
+    socket.on('line-lock-broadcast', handleLineLocks);
+    
     socket.on('line-lock-error', ({ filename, line, message }) => {
       if (filename === activeFile?.filename) {
         alert(message);
@@ -90,8 +113,8 @@ export default function CodeEditor({ roomId, activeFile, users }) {
     });
 
     return () => {
-      socket.off('content-change');
-      socket.off('line-lock-broadcast');
+      socket.off('content-change', handleContentChange);
+      socket.off('line-lock-broadcast', handleLineLocks);
       socket.off('line-lock-error');
       socket.off('save-doc');
     };
@@ -103,12 +126,20 @@ export default function CodeEditor({ roomId, activeFile, users }) {
     editorRef.current = editor;
     monacoRef.current = monaco;
 
+    // Set initial content if activeFile was already present
+    if (activeFile) {
+      isIncomingChangeRef.current = true;
+      editor.setValue(activeFile.content);
+      lastValueRef.current = activeFile.content;
+      isIncomingChangeRef.current = false;
+    }
+
     editor.onDidChangeCursorPosition((e) => {
       const newLine = e.position.lineNumber;
       
       socket.emit('cursor-move', {
-        roomId,
-        filename: activeFile.filename,
+        roomId: roomIdRef.current,
+        filename: activeFileRef.current?.filename,
         line: newLine,
         column: e.position.column,
         color: '#ff0000'
@@ -119,15 +150,15 @@ export default function CodeEditor({ roomId, activeFile, users }) {
         // Unlock previous line if it was us
         if (lastLockedLineRef.current) {
           socket.emit('line-unlock', {
-            roomId,
-            filename: activeFile.filename,
+            roomId: roomIdRef.current,
+            filename: activeFileRef.current?.filename,
             line: lastLockedLineRef.current
           });
         }
 
         socket.emit('line-lock', {
-          roomId,
-          filename: activeFile.filename,
+          roomId: roomIdRef.current,
+          filename: activeFileRef.current?.filename,
           line: newLine
         });
         lastLockedLineRef.current = newLine;
@@ -138,8 +169,8 @@ export default function CodeEditor({ roomId, activeFile, users }) {
     editor.onDidBlurEditorText(() => {
       if (lastLockedLineRef.current) {
         socket.emit('line-unlock', {
-          roomId,
-          filename: activeFile.filename,
+          roomId: roomIdRef.current,
+          filename: activeFileRef.current?.filename,
           line: lastLockedLineRef.current
         });
         lastLockedLineRef.current = null;
@@ -148,31 +179,45 @@ export default function CodeEditor({ roomId, activeFile, users }) {
   };
 
   const lastValueRef = useRef('');
-  const logDebounceRef = useRef(null);
-
-  useEffect(() => {
-    if (activeFile) {
-      lastValueRef.current = activeFile.content;
-    }
-  }, [activeFile?.filename]);
 
   const handleEditorChange = (value, event) => {
+    if (isRevertingRef.current || isIncomingChangeRef.current) return;
+    
     // Check if the change is on a locked line (by someone else)
     const change = event.changes[0];
     if (!change) return;
 
-    const changeLine = change.range.startLineNumber;
-    const lockedBy = lineLocksRef.current[changeLine];
-    
-    if (lockedBy && lockedBy !== socket.userId) {
-      console.warn(`Line ${changeLine} is locked by ${lockedBy}`);
-      return; 
+    // Check all affected lines
+    for (let i = change.range.startLineNumber; i <= change.range.endLineNumber; i++) {
+      const lockedBy = lineLocksRef.current[i];
+      if (lockedBy && lockedBy !== userId) {
+        console.warn(`Line ${i} is locked by ${lockedBy}`);
+        
+        // Revert the change immediately
+        if (editorRef.current) {
+          const model = editorRef.current.getModel();
+          isRevertingRef.current = true;
+          
+          // Get original text for the range
+          const originalText = lastValueRef.current.substring(change.rangeOffset, change.rangeOffset + change.rangeLength);
+          
+          model.pushEditOperations(
+            [],
+            [{
+              range: change.range,
+              text: originalText,
+              forceMoveMarkers: true
+            }],
+            () => null
+          );
+          
+          isRevertingRef.current = false;
+        }
+        return; 
+      }
     }
 
-    setContent(value);
-    lastValueRef.current = value;
-
-    // Calculate edit log info
+    // IMPORTANT: Calculate edit log info BEFORE updating lastValueRef
     const oldContent = lastValueRef.current.substring(change.rangeOffset, change.rangeOffset + change.rangeLength);
     const editLog = {
       lineNumber: change.range.startLineNumber,
@@ -180,7 +225,7 @@ export default function CodeEditor({ roomId, activeFile, users }) {
       newContent: change.text
     };
 
-    // Broadcast content and edit log together for real-time responsiveness and server recording
+    // Broadcast content and edit log together
     socket.emit('content-change', {
       roomId,
       filename: activeFile.filename,
@@ -189,6 +234,12 @@ export default function CodeEditor({ roomId, activeFile, users }) {
     });
 
     lastValueRef.current = value;
+    setContent(value); // Keep setContent for UI components that might depend on it (like Savestatus)
+    
+    // Notify parent about local content change
+    if (onContentChange) {
+      onContentChange(value);
+    }
   };
 
   const handleSave = () => {
@@ -196,9 +247,8 @@ export default function CodeEditor({ roomId, activeFile, users }) {
     socket.emit('save-doc', {
       roomId,
       filename: activeFile.filename,
-      content
+      content: editorRef.current ? editorRef.current.getValue() : content
     });
-    // The socket listener for 'save-doc' will update it to 'saved'
   };
 
   useEffect(() => {
@@ -210,7 +260,7 @@ export default function CodeEditor({ roomId, activeFile, users }) {
     };
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
-  }, [content, activeFile]);
+  }, [activeFile]);
 
   return (
     <div className="flex-1 h-full relative bg-[#0d1117]">
@@ -237,7 +287,6 @@ export default function CodeEditor({ roomId, activeFile, users }) {
         theme="vs-dark"
         path={activeFile?.filename}
         language={activeFile?.language || 'javascript'}
-        value={content}
         onChange={handleEditorChange}
         onMount={handleEditorDidMount}
         options={{

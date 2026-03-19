@@ -158,6 +158,14 @@ router.post('/:roomId/version', auth, async (req, res) => {
     await room.save();
 
     const savedVersion = file.versions[file.versions.length - 1]; 
+    
+    if (req.io) {
+      req.io.to(req.params.roomId).emit('version-saved', { 
+        filename, 
+        version: savedVersion 
+      });
+    }
+    
     res.status(201).json({ message: 'Version saved successfully', version: savedVersion });
   } catch (error) {
     console.error(error);

@@ -21,8 +21,9 @@ export default function Room() {
   const [rightPanel, setRightPanel] = useState('notes'); // 'notes' or 'history'
   const password = location.state?.password || '';
 
+  const user = JSON.parse(localStorage.getItem('user'));
+
   useEffect(() => {
-    const user = JSON.parse(localStorage.getItem('user'));
     if (!user) {
       navigate('/login');
       return;
@@ -42,13 +43,8 @@ export default function Room() {
         
         socket.emit('join-doc', { 
           roomId, 
-          username: user.username, 
-          userId: user.id 
+          password // Include password for server-side verification
         });
-
-        // Store identity on socket for reference in other components
-        socket.userId = user.id;
-        socket.username = user.username;
 
         socket.on('room-users', (usersList) => {
           setUsers(usersList);
@@ -58,11 +54,31 @@ export default function Room() {
           setFiles(prevFiles => prevFiles.map(f => 
             f.filename === filename ? { ...f, content } : f
           ));
-          setActiveFile(prevActive => {
-            if (prevActive && prevActive.filename === filename) {
-              return { ...prevActive, content };
+          
+          // CRITICAL FIX: Ensure activeFile is kept in sync with real-time content
+          // so that HistoryPanel (saving versions) and other components don't use stale state.
+          setActiveFile(prev => {
+            if (prev && prev.filename === filename) {
+              return { ...prev, content };
             }
-            return prevActive;
+            return prev;
+          });
+          // We don't call setActiveFile(newObj) directly because CodeEditor 
+          // handles its own real-time internal state updates from the same socket event.
+          // Updating activeFile here causes a parent re-render which is fine if we only change content prop.
+        });
+        
+        socket.on('notes-change', ({ filename, notes }) => {
+          setFiles(prevFiles => prevFiles.map(f => 
+            f.filename === filename ? { ...f, notes } : f
+          ));
+
+          // Also update activeFile notes
+          setActiveFile(prev => {
+            if (prev && prev.filename === filename) {
+              return { ...prev, notes };
+            }
+            return prev;
           });
         });
 
@@ -119,6 +135,15 @@ export default function Room() {
     }
   };
 
+  const handleLocalContentChange = (content) => {
+    setActiveFile(prev => {
+      if (prev) {
+        return { ...prev, content };
+      }
+      return prev;
+    });
+  };
+
   if (!activeFile && files.length === 0) {
     return <div className="min-h-screen bg-slate-900 text-white flex items-center justify-center">Loading room...</div>;
   }
@@ -147,6 +172,8 @@ export default function Room() {
                 roomId={roomId}
                 activeFile={activeFile}
                 users={users}
+                userId={user.id}
+                onContentChange={handleLocalContentChange}
               />
             ) : (
               <div className="h-full flex items-center justify-center text-slate-500">

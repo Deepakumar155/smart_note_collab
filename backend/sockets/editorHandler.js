@@ -10,8 +10,23 @@ module.exports = (io, socket) => {
   if (!io.lineLocks) io.lineLocks = {};
   
   socket.on('content-change', ({ roomId, filename, content, editLog }) => {
-    // Broadcast to everyone in the room (including sender) to keep all state in sync
-    io.to(roomId).emit('content-change', { filename, content });
+    // SECURITY FIX: Enforce line locks
+    if (editLog && editLog.lineNumber !== undefined) {
+      const line = editLog.lineNumber;
+      const locks = io.lineLocks[roomId]?.[filename] || {};
+      
+      if (locks[line] && locks[line].lockedBy !== socket.userId) {
+        console.warn(`Unauthorized edit attempt: User ${socket.username} on locked line ${line}`);
+        socket.emit('line-lock-error', { filename, line, message: 'You do not have permission to edit this line' });
+        
+        // Optional: Revert the sender's UI by sending back the current DB content (if we had it handy)
+        // For now, we just stop broadcasting the malicious change
+        return;
+      }
+    }
+
+    // Broadcast to everyone in the room (EXCEPT sender)
+    socket.to(roomId).emit('content-change', { filename, content });
     
     const debounceKey = `${roomId}:${filename}`;
     
@@ -37,10 +52,16 @@ module.exports = (io, socket) => {
     const timeoutId = setTimeout(async () => {
       try {
         const room = await Room.findOne({ roomId });
-        if (!room) return;
+        if (!room) {
+          console.warn(`Room ${roomId} not found for debounced save.`);
+          return;
+        }
 
         const file = room.files.find(f => f.filename === filename);
-        if (!file) return;
+        if (!file) {
+          console.warn(`File ${filename} not found in room ${roomId} for debounced save.`);
+          return;
+        }
 
         file.content = content;
         file.updatedAt = new Date();
@@ -55,6 +76,7 @@ module.exports = (io, socket) => {
         }
         
         await room.save();
+        console.log(`[DEBUG] Debounced save successful for ${debounceKey}`);
         saveDebounce.delete(debounceKey);
       } catch (err) {
         console.error('Debounced save error:', err);
@@ -111,6 +133,7 @@ module.exports = (io, socket) => {
   // Line Locking
   // Store format: io.lineLocks[roomId] = { [filename]: { [lineNumber]: { lockedBy: userId, timestamp } } }
   socket.on('line-lock', ({ roomId, filename, line }) => {
+    console.log(`Line lock request: Room ${roomId}, File ${filename}, Line ${line} by ${socket.userId}`);
     if (!io.lineLocks[roomId]) io.lineLocks[roomId] = {};
     if (!io.lineLocks[roomId][filename]) io.lineLocks[roomId][filename] = {};
     

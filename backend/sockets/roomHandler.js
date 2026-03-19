@@ -2,35 +2,46 @@ const Room = require('../models/Room');
 
 module.exports = (io, socket) => {
   // Join a room Document
-  socket.on('join-doc', async ({ roomId, username, userId }) => {
-    socket.join(roomId);
+  socket.on('join-doc', async ({ roomId, password }) => {
+    try {
+      const room = await Room.findOne({ roomId });
+      if (!room) return socket.emit('error-msg', 'Room not found');
 
-    // Save user info on socket
-    socket.roomId = roomId;
-    socket.username = username;
-    socket.userId = userId;
+      const isMatch = await room.comparePassword(password);
+      if (!isMatch) return socket.emit('error-msg', 'Invalid room password');
 
-    // Track room users
-    if (!io.roomUsers) io.roomUsers = {};
-    if (!io.roomUsers[roomId]) io.roomUsers[roomId] = [];
-    
-    // Check if user is already in the array
-    const exists = io.roomUsers[roomId].find(u => u.userId === userId && u.socketId === socket.id);
-    if (!exists) {
-      io.roomUsers[roomId].push({
-        userId,
-        username,
-        socketId: socket.id,
-        color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color for cursor
-      });
+      socket.join(roomId);
+      socket.roomId = roomId;
+
+      if (!io.roomUsers) io.roomUsers = {};
+      if (!io.roomUsers[roomId]) io.roomUsers[roomId] = [];
+      
+      const exists = io.roomUsers[roomId].find(u => u.userId === socket.userId && u.socketId === socket.id);
+      if (!exists) {
+        io.roomUsers[roomId].push({
+          userId: socket.userId,
+          username: socket.username,
+          socketId: socket.id,
+          color: `#${Math.floor(Math.random()*16777215).toString(16)}`
+        });
+      }
+
+      socket.to(roomId).emit('user-join', { username: socket.username, userId: socket.userId });
+      io.to(roomId).emit('room-users', io.roomUsers[roomId]);
+      
+      if (io.lineLocks && io.lineLocks[roomId]) {
+        for (const filename in io.lineLocks[roomId]) {
+          const locks = io.lineLocks[roomId][filename];
+          if (Object.keys(locks).length > 0) {
+            socket.emit('line-lock-broadcast', { filename, locks });
+          }
+        }
+      }
+      console.log(`User ${socket.username} joined room ${roomId}`);
+    } catch (err) {
+      console.error('Join Doc Error:', err);
+      socket.emit('error-msg', 'Internal server error');
     }
-
-    // Emit to room that a user joined
-    socket.to(roomId).emit('user-join', { username, userId });
-
-    // Send updated user list to everyone in room
-    io.to(roomId).emit('room-users', io.roomUsers[roomId]);
-    console.log(`User ${username} joined room ${roomId}`);
   });
 
   socket.on('disconnect', () => {

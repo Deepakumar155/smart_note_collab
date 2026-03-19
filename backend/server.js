@@ -36,6 +36,14 @@ const io = new Server(server, {
   }
 });
 
+// Socket Authentication Middleware
+const socketAuth = require('./middleware/socketAuth');
+io.use(socketAuth);
+
+// Basic Rate Limiting for Sockets
+const rateLimits = new Map(); // socketId -> { count, startTime }
+const MAX_EVENTS_PER_SEC = 50;
+
 // Middleware to inject io into req object
 app.use((req, res, next) => {
   req.io = io;
@@ -43,7 +51,13 @@ app.use((req, res, next) => {
 });
 
 // Database Connection
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://Deepak:DEEPAK1552005@cluster0.ao1yeyg.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0')
+const mongoURI = process.env.MONGODB_URI;
+if (!mongoURI) {
+  console.error('CRITICAL: MONGODB_URI is not defined in .env');
+  process.exit(1);
+}
+
+mongoose.connect(mongoURI)
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err));
 
@@ -57,14 +71,40 @@ const setupEditorHandlers = require('./sockets/editorHandler');
 const setupExecutionHandlers = require('./sockets/executionHandler');
 
 io.on('connection', (socket) => {
-  console.log('User connected:', socket.id);
+  console.log(`User connected: ${socket.username} (${socket.userId})`);
+
+  // Initialize rate limiting for this socket
+  rateLimits.set(socket.id, { count: 0, startTime: Date.now() });
+
+  // Middleware for every event on this socket to prevent spam
+  socket.use(([event, ...args], next) => {
+    const limit = rateLimits.get(socket.id);
+    if (!limit) return next();
+    
+    const now = Date.now();
+    
+    if (now - limit.startTime > 1000) {
+      limit.count = 1;
+      limit.startTime = now;
+    } else {
+      limit.count++;
+    }
+
+    if (limit.count > MAX_EVENTS_PER_SEC) {
+      console.warn(`Rate limit exceeded for user ${socket.username}. Disconnecting.`);
+      socket.emit('error-msg', 'Exceeded rate limit. Disconnecting.');
+      return socket.disconnect(true);
+    }
+    next();
+  });
 
   setupRoomHandlers(io, socket);
   setupEditorHandlers(io, socket);
   setupExecutionHandlers(io, socket);
 
   socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+    console.log('User disconnected:', socket.username);
+    rateLimits.delete(socket.id);
   });
 });
 

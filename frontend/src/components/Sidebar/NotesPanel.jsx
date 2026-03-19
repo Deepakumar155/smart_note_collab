@@ -10,7 +10,7 @@ export default function NotesPanel({ roomId, activeFile }) {
 
     const handleNotesChange = ({ filename, notes: newNotes }) => {
       if (filename === activeFile?.filename) {
-        setNotes(newNotes);
+        setNotes(prev => prev !== newNotes ? newNotes : prev);
       }
     };
 

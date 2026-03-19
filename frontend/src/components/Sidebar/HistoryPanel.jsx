@@ -39,8 +39,16 @@ export default function HistoryPanel({ roomId, activeFile }) {
 
     socket.on('log-update', handleLogUpdate);
 
+    const handleVersionSaved = (data) => {
+      if (data.filename === activeFile.filename) {
+        setVersions(prev => [data.version, ...prev]);
+      }
+    };
+    socket.on('version-saved', handleVersionSaved);
+
     return () => {
       socket.off('log-update', handleLogUpdate);
+      socket.off('version-saved', handleVersionSaved);
     };
   }, [roomId, activeFile?.filename]);
 
@@ -50,7 +58,9 @@ export default function HistoryPanel({ roomId, activeFile }) {
         filename: activeFile.filename,
         content: activeFile.content
       });
-      setVersions([data.version, ...versions]);
+      // We no longer manually update local versions state here because 
+      // the 'version-saved' socket event will handle it for both the saver and others.
+      // setVersions([data.version, ...versions]);
       alert('Version saved successfully!');
     } catch (err) {
       console.error('Failed to save version');
