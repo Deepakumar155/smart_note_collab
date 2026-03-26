@@ -1,0 +1,46 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - smartnote-network
+
+  backend:
+    build: ./backend
+    container_name: backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/smartnote
+      - JWT_SECRET=your_super_secret_jwt_key
+      - CLIENT_URL=http://localhost:5173
+    depends_on:
+      - mongodb
+    networks:
+      - smartnote-network
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=http://localhost:3000/api
+        - VITE_SOCKET_URL=http://localhost:3000
+    container_name: frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - smartnote-network
+
+networks:
+  smartnote-network:
+    driver: bridge
+
+volumes:
+  mongodb_data:

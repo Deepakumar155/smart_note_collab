@@ -1,0 +1,279 @@
+﻿
+> backend@1.0.0 dev
+> nodemon server.js
+
+[33m[nodemon] 3.1.10[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ≡ƒ¢í∩╕Å auth for agents: https://vestauth.com
+Server running on port 3000
+Connected to MongoDB
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+node.exe : UNCAUGHT 
+EXCEPTION: Error: 
+listen EADDRINUSE: 
+address already in 
+use :::3000
+At C:\Program Files\
+nodejs\npm.ps1:29 
+char:3
++   & $NODE_EXE 
+$NPM_CLI_JS $args
++   ~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: (UNCA   
+ UGHT EXCEPT...     
+in use :::3000:    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+    at Server.setupL
+istenHandle [as 
+_listen2] 
+(node:net:1940:16)
+    at 
+listenInCluster 
+(node:net:1997:12)
+    at 
+Server.listen 
+(node:net:2102:7)
+    at 
+Object.<anonymous> (
+C:\Users\deepa.DESKT
+OP-17A8IID\Downloads
+\procj\backend\serve
+r.js:110:8)
+    at 
+Module._compile (nod
+e:internal/modules/c
+js/loader:1730:14)
+    at Object..js (n
+ode:internal/modules
+/cjs/loader:1895:10)
+    at Module.load (
+node:internal/module
+s/cjs/loader:1465:32
+)
+    at 
+Function._load (node
+:internal/modules/cj
+s/loader:1282:12)
+    at TracingChanne
+l.traceSync (node:di
+agnostics_channel:32
+2:14)
+    at 
+wrapModuleLoad (node
+:internal/modules/cj
+s/loader:235:24) {
+  code: 
+'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ΓÜÖ∩╕Å  suppress all logs with { quiet: true }
+UNCAUGHT EXCEPTION: 
+Error: listen 
+EADDRINUSE: address 
+already in use 
+:::3000
+    at Server.setupL
+istenHandle [as 
+_listen2] 
+(node:net:1940:16)
+    at 
+listenInCluster 
+(node:net:1997:12)
+    at 
+Server.listen 
+(node:net:2102:7)
+    at 
+Object.<anonymous> (
+C:\Users\deepa.DESKT
+OP-17A8IID\Downloads
+\procj\backend\serve
+r.js:110:8)
+    at 
+Module._compile (nod
+e:internal/modules/c
+js/loader:1730:14)
+    at Object..js (n
+ode:internal/modules
+/cjs/loader:1895:10)
+    at Module.load (
+node:internal/module
+s/cjs/loader:1465:32
+)
+    at 
+Function._load (node
+:internal/modules/cj
+s/loader:1282:12)
+    at TracingChanne
+l.traceSync (node:di
+agnostics_channel:32
+2:14)
+    at 
+wrapModuleLoad (node
+:internal/modules/cj
+s/loader:235:24) {
+  code: 
+'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ΓÜÖ∩╕Å  enable debug logging with { debug: true }
+Server running on port 3000
+User connected: user_final1 (69bc1967e504134be264645e)
+Connected to MongoDB
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ≡ƒ¢í∩╕Å auth for agents: https://vestauth.com
+UNCAUGHT EXCEPTION: 
+Error: listen 
+EADDRINUSE: address 
+already in use 
+:::3000
+    at Server.setupL
+istenHandle [as 
+_listen2] 
+(node:net:1940:16)
+    at 
+listenInCluster 
+(node:net:1997:12)
+    at 
+Server.listen 
+(node:net:2102:7)
+    at 
+Object.<anonymous> (
+C:\Users\deepa.DESKT
+OP-17A8IID\Downloads
+\procj\backend\serve
+r.js:112:8)
+    at 
+Module._compile (nod
+e:internal/modules/c
+js/loader:1730:14)
+    at Object..js (n
+ode:internal/modules
+/cjs/loader:1895:10)
+    at Module.load (
+node:internal/module
+s/cjs/loader:1465:32
+)
+    at 
+Function._load (node
+:internal/modules/cj
+s/loader:1282:12)
+    at TracingChanne
+l.traceSync (node:di
+agnostics_channel:32
+2:14)
+    at 
+wrapModuleLoad (node
+:internal/modules/cj
+s/loader:235:24) {
+  code: 
+'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+Server running on port 3000
+User connected: user_final1 (69bc1967e504134be264645e)
+Connected to MongoDB
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ΓÜí∩╕Å secrets for agents: https://dotenvx.com/as2
+UNCAUGHT EXCEPTION: 
+Error: listen 
+EADDRINUSE: address 
+already in use 
+:::3000
+    at Server.setupL
+istenHandle [as 
+_listen2] 
+(node:net:1940:16)
+    at 
+listenInCluster 
+(node:net:1997:12)
+    at 
+Server.listen 
+(node:net:2102:7)
+    at 
+Object.<anonymous> (
+C:\Users\deepa.DESKT
+OP-17A8IID\Downloads
+\procj\backend\serve
+r.js:112:8)
+    at 
+Module._compile (nod
+e:internal/modules/c
+js/loader:1730:14)
+    at Object..js (n
+ode:internal/modules
+/cjs/loader:1895:10)
+    at Module.load (
+node:internal/module
+s/cjs/loader:1465:32
+)
+    at 
+Function._load (node
+:internal/modules/cj
+s/loader:1282:12)
+    at TracingChanne
+l.traceSync (node:di
+agnostics_channel:32
+2:14)
+    at 
+wrapModuleLoad (node
+:internal/modules/cj
+s/loader:235:24) {
+  code: 
+'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting child process[39m
+[32m[nodemon] starting `node server.js`[39m
+[dotenv@17.3.1] injecting env (4) from .env -- tip: ΓÜÖ∩╕Å  write to custom object with { processEnv: myObject }
+Server running on port 3000
+Connected to MongoDB
+^Cnpm error A 
+complete log of 
+this run can be 
+found in: C:\Users\d
+eepa.DESKTOP-17A8IID
+\AppData\Local\npm-c
+ache\_logs\2026-03-1
+9T15_03_05_622Z-debu
+g-0.log
